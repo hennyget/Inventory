@@ -173,7 +173,7 @@ label.chk input{width:20px;height:20px;margin-top:1px;flex:none}
       </label>
     </div>
 
-    <div class="note" id="ruleNote">Сканер записывает только серийные номера: <b>16 латинских букв и цифр</b>, например <span class="mono">8BLTQ26502003328</span>. Остальные штрихкоды на этикетке он не замечает.</div>
+    <div class="note" id="ruleNote">Сканер записывает только серийные номера: <b>16 или 20 знаков</b> (латинские буквы и цифры), например <span class="mono">8BLTQ26502003328</span> или <span class="mono">2151995464BC44022401</span>. Остальные штрихкоды на этикетке он не замечает.</div>
     <div class="note warn row" id="purgeRow" hidden>
       <span id="purgeTxt" style="flex:1 1 200px"></span>
       <button class="btn danger" id="purgeBtn" type="button">Удалить лишние</button>
@@ -354,7 +354,7 @@ function renderScans(){
 }
 $('scanList').addEventListener('click',e=>{const b=e.target.closest('.x'); if(b) removeCode(b.dataset.k);});
 $('manualForm').addEventListener('submit',e=>{e.preventDefault(); const v=$('manualIn').value.trim(); if(!v) return;
-  if(!isSerial(v)){ flashNote('«'+v+'» не похож на серийный номер: нужно ровно 16 латинских букв и цифр, сейчас '+norm(v).length+'.'); return; }
+  if(!isSerial(v)){ flashNote('«'+v+'» не похож на серийный номер: нужно 16 латинских букв и цифр или 20 знаков, из которых первые 10 цифры. Сейчас знаков: '+norm(v).length+'.'); return; }
   $('manualIn').value=''; const r=addCode(v,'вручную'); if(r==='dup') flashNote('Этот номер уже есть в списке.'); $('manualIn').focus();});
 function flashNote(t){ const n=$('camErr'); n.className='note warn'; n.textContent=t; n.hidden=false; clearTimeout(flashNote.t); flashNote.t=setTimeout(()=>{n.hidden=true},3000); }
 function lastScanAt(){ return scans.reduce((m,x)=>Math.max(m,x.at||0),0); }
@@ -589,8 +589,10 @@ function showToast(code,r){
 }
 
 /* =============== serial rule (fixed) =============== */
-// Serial number = exactly 16 Latin letters/digits, e.g. 8BLTQ26502003328
-const SERIAL_RX=/^[A-Z0-9]{16}$/;
+// Huawei serial numbers:
+//  - 16 Latin letters/digits, e.g. 8BLTQ26502003328
+//  - 20 chars: 10 digits + 10 letters/digits, e.g. 2151995464BC44022401
+const SERIAL_RX=/^(?:[A-Z0-9]{16}|[0-9]{10}[A-Z0-9]{10})$/;
 function isSerial(code){ return SERIAL_RX.test(norm(code)); }
 function plural(n,a,b,c){const m=n%10,h=n%100;return m===1&&h!==11?a:(m>=2&&m<=4&&(h<12||h>14)?b:c)}
 function renderRule(){
