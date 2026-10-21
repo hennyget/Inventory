@@ -74,18 +74,6 @@ label.chk input{width:20px;height:20px;margin-top:1px;flex:none}
 .empty{padding:22px 12px;text-align:center;color:var(--ink-2)}
 .manual{display:grid;grid-template-columns:1fr auto;gap:8px}
 .manual input{font-family:var(--mono)}
-.mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface-2);border-radius:12px;padding:4px}
-.mode button{border:0;background:transparent;border-radius:9px;padding:10px;font-weight:600;color:var(--ink-2)}
-.mode button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.tsd-status{border-radius:14px;padding:18px 16px;display:flex;flex-direction:column;gap:4px;min-height:92px;justify-content:center;background:var(--surface-2)}
-.tsd-status b{font-size:20px}
-.tsd-status span{font-family:var(--mono);font-size:16px;overflow-wrap:anywhere}
-.tsd-status.ok{background:var(--ok-soft)} .tsd-status.ok b{color:var(--ok)}
-.tsd-status.dup{background:var(--warn-soft)} .tsd-status.dup b{color:var(--warn)}
-.tsd-status.bad{background:var(--bad-soft)} .tsd-status.bad b{color:var(--bad)}
-.tsd-status.pulse{animation:pulse .35s ease-out}
-@keyframes pulse{from{transform:scale(.98)}to{transform:scale(1)}}
-#tsdIn{font-family:var(--mono);font-size:16px;caret-color:var(--accent)}
 
 /* camera overlay */
 .cam{position:fixed;inset:0;z-index:20;background:#000;display:flex;flex-direction:column}
@@ -189,17 +177,6 @@ label.chk input{width:20px;height:20px;margin-top:1px;flex:none}
     <div class="note warn row" id="purgeRow" hidden>
       <span id="purgeTxt" style="flex:1 1 200px"></span>
       <button class="btn danger" id="purgeBtn" type="button">Удалить лишние</button>
-    </div>
-
-    <div class="mode" role="group" aria-label="Чем сканировать">
-      <button type="button" id="modeCam" aria-pressed="true">Камера телефона</button>
-      <button type="button" id="modeTsd" aria-pressed="false">ТСД / сканер</button>
-    </div>
-
-    <div class="panel" id="tsdBox" hidden>
-      <div class="tsd-status" id="tsdStatus"><b>Готов к сканированию</b><span>Нажимайте курок ТСД</span></div>
-      <input class="field" id="tsdIn" type="text" inputmode="none" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Курсор здесь, сканируйте" aria-label="Поле для сканера ТСД">
-      <p class="small muted">Если после скана номер появляется в поле, но не записывается, в настройках сканера ТСД включите «Эмуляция клавиатуры» и суффикс «Enter».</p>
     </div>
 
     <button class="btn primary big" id="startCam" type="button">
@@ -377,7 +354,7 @@ function renderScans(){
 }
 $('scanList').addEventListener('click',e=>{const b=e.target.closest('.x'); if(b) removeCode(b.dataset.k);});
 $('manualForm').addEventListener('submit',e=>{e.preventDefault(); const v=$('manualIn').value.trim(); if(!v) return;
-  if(!isSerial(v)){ feedback('bad'); flashNote('«'+v+'» не похож на серийный номер: нужно 16 латинских букв и цифр или 20 знаков, из которых первые 10 цифры. Сейчас знаков: '+norm(v).length+'.'); return; }
+  if(!isSerial(v)){ flashNote('«'+v+'» не похож на серийный номер: нужно 16 латинских букв и цифр или 20 знаков, из которых первые 10 цифры. Сейчас знаков: '+norm(v).length+'.'); return; }
   $('manualIn').value=''; const r=addCode(v,'вручную'); if(r==='dup') flashNote('Этот номер уже есть в списке.'); $('manualIn').focus();});
 function flashNote(t){ const n=$('camErr'); n.className='note warn'; n.textContent=t; n.hidden=false; clearTimeout(flashNote.t); flashNote.t=setTimeout(()=>{n.hidden=true},3000); }
 function lastScanAt(){ return scans.reduce((m,x)=>Math.max(m,x.at||0),0); }
@@ -399,14 +376,10 @@ function feedback(kind){
   if(kind==='init'){ try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); actx.resume(); }catch(e){} return; }
   if(!$('soundOn').checked) return;
   try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume();
-    const tone=(f,t0,d)=>{ const o=actx.createOscillator(),g=actx.createGain(); o.type='square'; o.frequency.value=f;
-      g.gain.setValueAtTime(.08,actx.currentTime+t0); g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+t0+d);
-      o.connect(g).connect(actx.destination); o.start(actx.currentTime+t0); o.stop(actx.currentTime+t0+d+.05); };
-    if(kind==='ok') tone(1800,0,.12);
-    else if(kind==='bad'){ tone(220,0,.25); tone(220,.32,.25); }
-    else tone(440,0,.3);
-  }catch(e){}
-  try{ navigator.vibrate&&navigator.vibrate(kind==='ok'?70:kind==='bad'?[120,80,120]:[60,50,60]); }catch(e){}
+    const o=actx.createOscillator(),g=actx.createGain(); o.type='square'; o.frequency.value=kind==='ok'?1800:440;
+    g.gain.setValueAtTime(.08,actx.currentTime); g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+(kind==='ok'?.12:.3));
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+.35);}catch(e){}
+  try{ navigator.vibrate&&navigator.vibrate(kind==='ok'?70:[60,50,60]); }catch(e){}
 }
 
 /* =============== export scans =============== */
@@ -424,6 +397,22 @@ function scansFileName(){
   const parts=['Сканы',clean(LS.get('inv.name','')||'телефон')]; const c=clean(LS.get('inv.cat','')); if(c) parts.push(c);
   parts.push(today()); return parts.join('_')+'.xlsx';
 }
+const XLSX_MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+const TR={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
+function latinName(name){ // iPhone: Latin-only file names, otherwise iOS may save the file as "document"/"Unknown"
+  const out=[...String(name)].map(ch=>{ const l=ch.toLowerCase(); if(l in TR){ const t=TR[l]; return ch!==l&&t ? t[0].toUpperCase()+t.slice(1) : t; } return ch; }).join('');
+  return out.replace(/[^A-Za-z0-9._-]+/g,'_').replace(/_+/g,'_').replace(/^_|_(?=\.)/g,'');
+}
+// iPhone: open the share sheet with a real .xlsx (user picks «Сохранить в Файлы», Telegram, mail…).
+// Returns 'shared' | 'cancelled' | 'unsupported'. Must be called straight from a tap, with no await before it.
+async function shareXlsx(data,name){
+  try{
+    const f=new File([data],latinName(name),{type:XLSX_MIME});
+    if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[f]}))) return 'unsupported';
+    await navigator.share({files:[f]}); return 'shared';
+  }catch(e){ return e&&e.name==='AbortError' ? 'cancelled' : 'unsupported'; }
+}
 function downloadBlob(data,name){
   const blob=new Blob([data],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
@@ -439,14 +428,24 @@ function scansCsv(){
   return '\ufeff'+['Серийный номер,Время,Сканировал'].concat(scans.map(s=>[q(s.code),q(fmtDT(s.at)),q(name)].join(','))).join('\r\n');
 }
 function showTextFallback(){ $('textOut').value=scansText(); $('textBox').hidden=false; }
-$('saveBtn').onclick=()=>{
+$('saveBtn').onclick=async()=>{
   if(!scans.length) return exportMsg('Список пуст.','warn');
+  if(IS_IOS){
+    const name=latinName(scansFileName());
+    const r=await shareXlsx(scansWorkbook(),scansFileName());
+    if(r==='shared'){ markSaved(); exportMsg('Готово: файл <b>'+esc(name)+'</b>. Если выбрали «Сохранить в Файлы», он лежит в приложении «Файлы».'); return; }
+    if(r==='cancelled') return;
+    downloadBlob(scansWorkbook(),name); markSaved();
+    exportMsg('Файл <b>'+esc(name)+'</b> сохраняется в «Загрузки» (приложение «Файлы»). Если его там нет, нажмите «Скопировать список».');
+    return;
+  }
   downloadBlob(scansWorkbook(),scansFileName()); markSaved();
   exportMsg('Файл <b>'+esc(scansFileName())+'</b> должен появиться в «Загрузках». Если его нет, нажмите «Отправить файл» или «Скопировать список».');
   if(IS_WV) showTextFallback();
 };
 function csvFile(){ return new File([scansCsv()],scansFileName().replace(/\.xlsx$/,'.csv'),{type:'text/csv'}); }
 (function(){
+  if(IS_IOS){ $('saveBtn').textContent='Сохранить файл'; return; } // iPhone: one button, share sheet with .xlsx
   try{ if(navigator.share && (!navigator.canShare || navigator.canShare({files:[csvFile()]}))) $('shareBtn').hidden=false; }catch(e){}
 })();
 $('shareBtn').onclick=async()=>{
@@ -774,57 +773,13 @@ $('reportBtn').onclick=()=>{
   const miss=src.rows.filter((r,i)=>!byRow.has(i));
   if(miss.length){ const a=[H.map(v=>({v,t:'s',s:hdr}))].concat(miss.map(r=>H.map((_,c)=>({v:r.c[c]||'',t:'s',s:{border}})))); const w=XLSX.utils.aoa_to_sheet(a); w['!cols']=ws['!cols'].slice(0,H.length); XLSX.utils.book_append_sheet(wb,w,'Не найдено'); }
   if(extra.size){ const a=[['Серийный номер','Кто сканировал'].map(v=>({v,t:'s',s:hdr}))].concat([...extra.values()].map(x=>[x.code,x.who.join(', ')].map(v=>({v,t:'s',s:{border}})))); const w=XLSX.utils.aoa_to_sheet(a); w['!cols']=[{wch:28},{wch:30}]; XLSX.utils.book_append_sheet(wb,w,'Нет в списке'); }
-  downloadBlob(XLSX.write(wb,{bookType:'xlsx',type:'array'}),src.fileName.replace(/\.[^.]+$/,'')+'_сверка_'+today()+'.xlsx');
+  const out=XLSX.write(wb,{bookType:'xlsx',type:'array'}), rname=src.fileName.replace(/\.[^.]+$/,'')+'_сверка_'+today()+'.xlsx';
+  if(IS_IOS){ shareXlsx(out,rname).then(r=>{ if(r==='unsupported') downloadBlob(out,latinName(rname)); }); return; }
+  downloadBlob(out,rname);
 };
-
-/* =============== TSD / hardware scanner =============== */
-let tsdOn=false, tsdTimer=null;
-const tsdIn=$('tsdIn');
-function isEditable(el){ return el && el!==tsdIn && (el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable); }
-function cleanScan(raw){ return String(raw).replace(/[\x00-\x1f\x7f]/g,'').replace(/^\][A-Za-z][0-9]/,'').trim(); }
-function tsdStatus(kind,title,text){
-  const el=$('tsdStatus'); el.className='tsd-status '+(kind||''); void el.offsetWidth; if(kind) el.classList.add('pulse');
-  el.innerHTML='<b>'+esc(title)+'</b><span>'+esc(text||'')+'</span>';
-}
-function handleScan(raw){
-  const code=cleanScan(raw); if(!code) return;
-  if(!isSerial(code)){ feedback('bad'); tsdStatus('bad','Не серийный номер',code+' · знаков: '+norm(code).length); return; }
-  const r=addCode(code,'ТСД');
-  if(r==='ok') tsdStatus('ok','✓ Записан',code+' · всего '+scans.length);
-  else if(r==='dup') tsdStatus('dup','Уже есть в списке',code);
-}
-function tsdSubmit(){ clearTimeout(tsdTimer); const v=tsdIn.value; tsdIn.value=''; handleScan(v); }
-tsdIn.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key==='Tab'){ e.preventDefault(); tsdSubmit(); } });
-function onTsdInput(){
-  if(/[\r\n\t]/.test(tsdIn.value)){ tsdSubmit(); return; }
-  // scanners set up without a suffix: submit once the input pauses and looks like a serial
-  clearTimeout(tsdTimer); tsdTimer=setTimeout(()=>{ if(tsdIn.value && isSerial(cleanScan(tsdIn.value))) tsdSubmit(); },250);
-}
-tsdIn.addEventListener('input',onTsdInput);
-function refocusTsd(){ if(tsdOn && !$('scanTab').hidden && !isEditable(document.activeElement)) { try{ tsdIn.focus({preventScroll:true}); }catch(e){} } }
-tsdIn.addEventListener('blur',()=>setTimeout(refocusTsd,150));
-document.addEventListener('click',()=>setTimeout(refocusTsd,0));
-// catch scanner keystrokes even when the field lost focus
-document.addEventListener('keydown',e=>{
-  if(!tsdOn || $('scanTab').hidden || e.target===tsdIn || isEditable(e.target)) return;
-  if(e.key==='Enter'||e.key==='Tab'){ if(tsdIn.value){ e.preventDefault(); tsdSubmit(); } refocusTsd(); return; }
-  if(e.key && e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey){
-    e.preventDefault(); try{ tsdIn.focus({preventScroll:true}); }catch(err){}
-    tsdIn.value+=e.key; onTsdInput();   // first character lands in the field, the rest follow there
-  }
-});
-function setMode(tsd){
-  tsdOn=tsd; LS.set('inv.tsd',tsd);
-  $('modeTsd').setAttribute('aria-pressed',String(tsd)); $('modeCam').setAttribute('aria-pressed',String(!tsd));
-  $('tsdBox').hidden=!tsd; $('startCam').hidden=tsd;
-  if(tsd){ feedback('init'); refocusTsd(); }
-}
-$('modeTsd').onclick=()=>setMode(true);
-$('modeCam').onclick=()=>setMode(false);
 
 /* boot */
 window.__ruleReady=true;
-setMode(LS.get('inv.tsd',false));
 whoLine(); renderScans(); setTab(LS.get('inv.tab','scan'));
 })();
 </script>
