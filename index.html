@@ -74,6 +74,18 @@ label.chk input{width:20px;height:20px;margin-top:1px;flex:none}
 .empty{padding:22px 12px;text-align:center;color:var(--ink-2)}
 .manual{display:grid;grid-template-columns:1fr auto;gap:8px}
 .manual input{font-family:var(--mono)}
+.mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface-2);border-radius:12px;padding:4px}
+.mode button{border:0;background:transparent;border-radius:9px;padding:10px;font-weight:600;color:var(--ink-2)}
+.mode button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.tsd-status{border-radius:14px;padding:18px 16px;display:flex;flex-direction:column;gap:4px;min-height:92px;justify-content:center;background:var(--surface-2)}
+.tsd-status b{font-size:20px}
+.tsd-status span{font-family:var(--mono);font-size:16px;overflow-wrap:anywhere}
+.tsd-status.ok{background:var(--ok-soft)} .tsd-status.ok b{color:var(--ok)}
+.tsd-status.dup{background:var(--warn-soft)} .tsd-status.dup b{color:var(--warn)}
+.tsd-status.bad{background:var(--bad-soft)} .tsd-status.bad b{color:var(--bad)}
+.tsd-status.pulse{animation:pulse .35s ease-out}
+@keyframes pulse{from{transform:scale(.98)}to{transform:scale(1)}}
+#tsdIn{font-family:var(--mono);font-size:16px;caret-color:var(--accent)}
 
 /* camera overlay */
 .cam{position:fixed;inset:0;z-index:20;background:#000;display:flex;flex-direction:column}
@@ -177,6 +189,17 @@ label.chk input{width:20px;height:20px;margin-top:1px;flex:none}
     <div class="note warn row" id="purgeRow" hidden>
       <span id="purgeTxt" style="flex:1 1 200px"></span>
       <button class="btn danger" id="purgeBtn" type="button">Удалить лишние</button>
+    </div>
+
+    <div class="mode" role="group" aria-label="Чем сканировать">
+      <button type="button" id="modeCam" aria-pressed="true">Камера телефона</button>
+      <button type="button" id="modeTsd" aria-pressed="false">ТСД / сканер</button>
+    </div>
+
+    <div class="panel" id="tsdBox" hidden>
+      <div class="tsd-status" id="tsdStatus"><b>Готов к сканированию</b><span>Нажимайте курок ТСД</span></div>
+      <input class="field" id="tsdIn" type="text" inputmode="none" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Курсор здесь, сканируйте" aria-label="Поле для сканера ТСД">
+      <p class="small muted">Если после скана номер появляется в поле, но не записывается, в настройках сканера ТСД включите «Эмуляция клавиатуры» и суффикс «Enter».</p>
     </div>
 
     <button class="btn primary big" id="startCam" type="button">
@@ -354,7 +377,7 @@ function renderScans(){
 }
 $('scanList').addEventListener('click',e=>{const b=e.target.closest('.x'); if(b) removeCode(b.dataset.k);});
 $('manualForm').addEventListener('submit',e=>{e.preventDefault(); const v=$('manualIn').value.trim(); if(!v) return;
-  if(!isSerial(v)){ flashNote('«'+v+'» не похож на серийный номер: нужно 16 латинских букв и цифр или 20 знаков, из которых первые 10 цифры. Сейчас знаков: '+norm(v).length+'.'); return; }
+  if(!isSerial(v)){ feedback('bad'); flashNote('«'+v+'» не похож на серийный номер: нужно 16 латинских букв и цифр или 20 знаков, из которых первые 10 цифры. Сейчас знаков: '+norm(v).length+'.'); return; }
   $('manualIn').value=''; const r=addCode(v,'вручную'); if(r==='dup') flashNote('Этот номер уже есть в списке.'); $('manualIn').focus();});
 function flashNote(t){ const n=$('camErr'); n.className='note warn'; n.textContent=t; n.hidden=false; clearTimeout(flashNote.t); flashNote.t=setTimeout(()=>{n.hidden=true},3000); }
 function lastScanAt(){ return scans.reduce((m,x)=>Math.max(m,x.at||0),0); }
@@ -376,10 +399,14 @@ function feedback(kind){
   if(kind==='init'){ try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); actx.resume(); }catch(e){} return; }
   if(!$('soundOn').checked) return;
   try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume();
-    const o=actx.createOscillator(),g=actx.createGain(); o.type='square'; o.frequency.value=kind==='ok'?1800:440;
-    g.gain.setValueAtTime(.08,actx.currentTime); g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+(kind==='ok'?.12:.3));
-    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+.35);}catch(e){}
-  try{ navigator.vibrate&&navigator.vibrate(kind==='ok'?70:[60,50,60]); }catch(e){}
+    const tone=(f,t0,d)=>{ const o=actx.createOscillator(),g=actx.createGain(); o.type='square'; o.frequency.value=f;
+      g.gain.setValueAtTime(.08,actx.currentTime+t0); g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+t0+d);
+      o.connect(g).connect(actx.destination); o.start(actx.currentTime+t0); o.stop(actx.currentTime+t0+d+.05); };
+    if(kind==='ok') tone(1800,0,.12);
+    else if(kind==='bad'){ tone(220,0,.25); tone(220,.32,.25); }
+    else tone(440,0,.3);
+  }catch(e){}
+  try{ navigator.vibrate&&navigator.vibrate(kind==='ok'?70:kind==='bad'?[120,80,120]:[60,50,60]); }catch(e){}
 }
 
 /* =============== export scans =============== */
@@ -750,8 +777,54 @@ $('reportBtn').onclick=()=>{
   downloadBlob(XLSX.write(wb,{bookType:'xlsx',type:'array'}),src.fileName.replace(/\.[^.]+$/,'')+'_сверка_'+today()+'.xlsx');
 };
 
+/* =============== TSD / hardware scanner =============== */
+let tsdOn=false, tsdTimer=null;
+const tsdIn=$('tsdIn');
+function isEditable(el){ return el && el!==tsdIn && (el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable); }
+function cleanScan(raw){ return String(raw).replace(/[\x00-\x1f\x7f]/g,'').replace(/^\][A-Za-z][0-9]/,'').trim(); }
+function tsdStatus(kind,title,text){
+  const el=$('tsdStatus'); el.className='tsd-status '+(kind||''); void el.offsetWidth; if(kind) el.classList.add('pulse');
+  el.innerHTML='<b>'+esc(title)+'</b><span>'+esc(text||'')+'</span>';
+}
+function handleScan(raw){
+  const code=cleanScan(raw); if(!code) return;
+  if(!isSerial(code)){ feedback('bad'); tsdStatus('bad','Не серийный номер',code+' · знаков: '+norm(code).length); return; }
+  const r=addCode(code,'ТСД');
+  if(r==='ok') tsdStatus('ok','✓ Записан',code+' · всего '+scans.length);
+  else if(r==='dup') tsdStatus('dup','Уже есть в списке',code);
+}
+function tsdSubmit(){ clearTimeout(tsdTimer); const v=tsdIn.value; tsdIn.value=''; handleScan(v); }
+tsdIn.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key==='Tab'){ e.preventDefault(); tsdSubmit(); } });
+function onTsdInput(){
+  if(/[\r\n\t]/.test(tsdIn.value)){ tsdSubmit(); return; }
+  // scanners set up without a suffix: submit once the input pauses and looks like a serial
+  clearTimeout(tsdTimer); tsdTimer=setTimeout(()=>{ if(tsdIn.value && isSerial(cleanScan(tsdIn.value))) tsdSubmit(); },250);
+}
+tsdIn.addEventListener('input',onTsdInput);
+function refocusTsd(){ if(tsdOn && !$('scanTab').hidden && !isEditable(document.activeElement)) { try{ tsdIn.focus({preventScroll:true}); }catch(e){} } }
+tsdIn.addEventListener('blur',()=>setTimeout(refocusTsd,150));
+document.addEventListener('click',()=>setTimeout(refocusTsd,0));
+// catch scanner keystrokes even when the field lost focus
+document.addEventListener('keydown',e=>{
+  if(!tsdOn || $('scanTab').hidden || e.target===tsdIn || isEditable(e.target)) return;
+  if(e.key==='Enter'||e.key==='Tab'){ if(tsdIn.value){ e.preventDefault(); tsdSubmit(); } refocusTsd(); return; }
+  if(e.key && e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey){
+    e.preventDefault(); try{ tsdIn.focus({preventScroll:true}); }catch(err){}
+    tsdIn.value+=e.key; onTsdInput();   // first character lands in the field, the rest follow there
+  }
+});
+function setMode(tsd){
+  tsdOn=tsd; LS.set('inv.tsd',tsd);
+  $('modeTsd').setAttribute('aria-pressed',String(tsd)); $('modeCam').setAttribute('aria-pressed',String(!tsd));
+  $('tsdBox').hidden=!tsd; $('startCam').hidden=tsd;
+  if(tsd){ feedback('init'); refocusTsd(); }
+}
+$('modeTsd').onclick=()=>setMode(true);
+$('modeCam').onclick=()=>setMode(false);
+
 /* boot */
 window.__ruleReady=true;
+setMode(LS.get('inv.tsd',false));
 whoLine(); renderScans(); setTab(LS.get('inv.tab','scan'));
 })();
 </script>
